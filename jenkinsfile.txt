@@ -1,0 +1,68 @@
+pipeline {
+    agent any
+    tools {
+        maven 'maven'
+    }
+    stages {
+        stage('Clean') {
+            steps {
+                deleteDir() // Clean the workspace
+                sh 'echo "Clean the repository"' // Display message about cleaning the repository
+            }
+        }
+        stage('Clone') {
+            steps {
+                git branch: 'dev1', credentialsId: 'raja', url: 'https://github.com/Rajendra0609/web-application.git'
+            }
+        }
+        stage('Compile') {
+            steps {
+                sh 'mvn compile'
+            }
+        }
+        stage('Build') {
+            steps {
+                sh 'mvn install'
+            }
+        }
+        stage('Test') {
+            steps {
+                sh 'mvn test'
+                sh 'mvn surefire:test'
+                sh 'mvn failsafe:integration-test'
+            }
+            post {
+                success {
+                    junit 'target/surefire-reports/**/*.xml'
+                }   
+            }
+        }
+        stage('image') {
+            steps {
+                sh 'docker build -t daggu1997/web-application:$BUILD_ID .'
+                sh 'docker build -t daggu1997/web-application:latest .'
+            }
+        }
+        stage('image_scan') {
+            steps {
+                sh ' trivy image --format template --template "@/usr/local/share/trivy/templates/html.tpl" -o report.html daggu1997/web-application:$BUILD_ID '
+            }
+        }
+        stage('push') {
+            steps {
+                sh 'docker login -u daggu1997 -p Rajendra@1997'
+                sh 'docker push daggu1997/web-application:$BUILD_ID'
+                sh 'docker push daggu1997/web-application:latest'
+            }
+        }
+        stage('deployk8') {
+            steps {
+                script{
+                    kubernetesDeploy configs: 'spring-boot-deployment.yaml', kubeconfigId: 'ks8configpwd'
+                }
+            }
+        }
+    }
+}
+
+
